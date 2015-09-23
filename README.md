@@ -1,1 +1,1 @@
-# pml_cp
+# Practical Machine Learning Course Project.

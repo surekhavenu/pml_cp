@@ -1,0 +1,174 @@
+---
+title: 'Practical Machine Learning : Prediction of excercise manner'
+output: html_document
+---
+
+Background
+==========
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+Data 
+====
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+Goal
+====
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. Following report describes how model is built, how cross validation is used, what is the expected out of sample error is, and why the choices made. The prediction model is used to predict 20 different test cases
+
+Load the required paackages
+===========================
+```{r LoadPackages}
+library(caret)
+library(randomForest)
+```
+
+Getting and Cleaning Data
+=========================
+1. Download data sets using provided URLs if not exist.
+```{r DownloadData}
+# Download training data set if not exists
+trainDS <- "pml-training.csv"
+if (!file.exists(trainDS)) {
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+                destfile=trainDS, method="curl")
+}
+
+# Download test data set if not exists
+testDS  <- "pml-testing.csv"
+if (!file.exists(testDS)) {
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                destfile=testDS, method="curl")
+}
+```
+
+2. Read data sets into data frames.
+```{r ReadData}
+# Read training data set into a data frame
+trainDF <- read.csv(trainDS)
+
+# Display the dimensions of training data frame
+dim(trainDF)
+
+# Read test data set into a data frame
+testDF <- read.csv(testDS)
+
+# Display the dimensions of test data frame
+dim(testDF)
+```
+
+3. Clean data frames to remove the columns containing missing values and columns that cannot be used for measurements.
+```{r CleanData}
+# Remove the columns that contain missing values
+trainDF <- trainDF[, colSums(is.na(trainDF)) == 0] 
+testDF <- testDF[, colSums(is.na(testDF)) == 0] 
+
+# Remove non numeric columns which cannot be used for measurements except classe
+trainDFclasse <- trainDF$classe
+trainDF <- trainDF[, sapply(trainDF, is.numeric)]
+trainDF$classe <- trainDFclasse
+testDF <- testDF[, sapply(testDF, is.numeric)]
+
+# Remove first 4 columns which are not used for measurements
+trainDF <- trainDF[, 5:length(names(trainDF))]
+testing <- testDF[, 5:length(names(testDF))]
+
+# Display the dimensions of training data frame
+dim(trainDF)
+
+# Display the dimensions of testing data frame
+dim(testing)
+```
+
+4. Partition the train data frame into a pure train data frame(70%) and a validation data frame(30%) used for cross validation.
+```{r PartitionData}
+# Set seed for reproducibility
+set.seed(13234)
+
+# Partition train data frame into 70 : 30 data frames
+inTrain = createDataPartition(trainDF$classe, p = 0.7, list=FALSE)
+training = trainDF[inTrain,]
+validation = trainDF[-inTrain,]
+
+# Display the dimensions of training data frame 
+dim(training)
+
+# Display the dimensions of validation data frame
+dim(validation)
+
+# Display the dimensions of testing data frame
+dim(testing)
+```
+
+Building Model
+==============
+We will build model for training data using method random forest and using train control method 5-fold cross validation. We have used method random forest as it results into high accuracy rate. 
+```{r BuildModel}
+# Train the model
+modFit <- train(classe ~., 
+                method="rf", 
+                data=training, 
+                trControl= trainControl(method='cv', 5),
+                ntree=250)
+
+# Display the model
+modFit
+
+## Display the variable importance
+varImp(modFit)
+
+# Display the final model
+modFit$finalModel
+```
+
+Evaluating Model for validation data set
+========================================
+We will evaluate the model on validation data set.
+```{r EvaludateModelValidation}
+# Evaluate model on validation data set
+predictValidation <- predict(modFit, validation)
+
+# Display confusionMatrix
+cm <- confusionMatrix(validation$classe, predictValidation)
+cm
+
+# Estimate the accuracy percentage
+accuracy <- as.numeric(cm$overall[1]) * 100
+accuracy
+
+# Estimate out of sample error percentage
+out_of_sample_error <- (1 - as.numeric(cm$overall[1]))* 100
+out_of_sample_error
+```
+
+So, the estimated accuracy of the model is `r accuracy`% and the estimated out of sample error is `r out_of_sample_error`%.
+
+Evaluating Model for test data set
+==================================
+We will evaluate the model on test data set.
+```{r EvaludateModelTest}
+## Evaluate model on testing data set
+predict(modFit, testing)
+```
+
+Figures
+=======
+We will plot various models.
+```{r PlotModel}
+# plot model 
+plot(modFit)
+
+# plot the final model
+plot(modFit$finalModel)
+
+# plot the variable importance 
+varImpPlot(modFit$finalModel)
+```
